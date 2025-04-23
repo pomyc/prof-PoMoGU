@@ -12,22 +12,21 @@ def handle_message(data):
 
 def ask_gpt(message):
     try:
-        if any(word in message.lower() for word in ["звільнення", "оплата", "вибори", "делегат", "відпустка"]):
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "Ви профспілковий помічник. Відповідайте коротко, ввічливо, зрозуміло."},
-                    {"role": "user", "content": message}
-                ]
-            )
-            return response.choices[0].message.content
-        else:
-            return (
-    "🔍 Не вдалося знайти точної відповіді.\n"
-    "📍 Зверніться до профспілки:\n"
-    "Дніпро, пр. Д.Яворницького, 93, к.327\n"
-    "📞 050 324-54-11\n"
-    "📧 profpmgu@gmail.com"
-)
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Ви профспілковий помічник. Відповідайте коротко, ввічливо, зрозуміло."},
+                {"role": "user", "content": message}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return (
+            "🔍 Не вдалося знайти точної відповіді.\n"
+            "📍 Зверніться до профспілки:\n"
+            "Дніпро, пр. Д.Яворницького, 93, к.327\n"
+            "📞 050 324-54-11\n"
+            "📧 profpmgu@gmail.com"
+        )
     except Exception as e:
         return f"⚠️ Виникла помилка: {str(e)}"
