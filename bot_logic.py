@@ -21,6 +21,7 @@ def ask_gpt(message):
         )
         return response.choices[0].message.content
     except Exception as e:
+        print(f"❌ GPT error: {e}")
         return (
             "🔍 Не вдалося знайти точної відповіді.\n"
             "📍 Зверніться до профспілки:\n"
