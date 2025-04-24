@@ -1,6 +1,10 @@
 from flask import Flask, request
 from bot_logic import handle_message
 import os
+import sys
+import logging
+
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 app = Flask(__name__)
 
