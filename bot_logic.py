@@ -5,7 +5,6 @@ from seniority_calculator import calculate_seniority
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Простий user_state — словник для зберігання "режиму"
 user_state = {}
 
 def handle_message(data):
@@ -13,22 +12,47 @@ def handle_message(data):
     chat_id = data['message']['chat']['id']
     user_id = data['message']['from']['id']
 
-    # Якщо користувач у режимі розрахунку стажу
-    if user_state.get(user_id) == "awaiting_seniority_input":
-        reply = calculate_seniority_input(message)
-        user_state.pop(user_id, None)  # Очистити стан
-        return jsonify({"method": "sendMessage", "chat_id": chat_id, "text": reply})
+    # Якщо /start — показати меню
+    if message.strip().lower() in ["/start", "start"]:
+        return jsonify({
+            "method": "sendMessage",
+            "chat_id": chat_id,
+            "text": "👋 Вітаю! Я профспілковий помічник.\nОберіть потрібну дію:",
+            "reply_markup": {
+                "keyboard": [
+                    [{"text": "📋 Задати питання"}],
+                    [{"text": "📅 Розрахунок трудового стажу"}],
+                    [{"text": "📞 Контакти профспілки"}]
+                ],
+                "resize_keyboard": True,
+                "one_time_keyboard": False
+            }
+        })
 
-    # Якщо команда /стаж або натискання кнопки
-    if message.strip().lower() in ["/стаж", "розрахунок трудового стажу"]:
+    # Якщо вибір "Розрахунок трудового стажу"
+    if message.strip() == "📅 Розрахунок трудового стажу":
         user_state[user_id] = "awaiting_seniority_input"
         return jsonify({
             "method": "sendMessage",
             "chat_id": chat_id,
-            "text": "📅 Введіть дату початку та дату завершення роботи через крапку з комами.\nНаприклад:\n01.09.2015; 24.04.2025\nАбо просто одну дату, якщо працюєте досі."
+            "text": "📅 Введіть дату початку та дату завершення роботи через крапку з комами.\nНаприклад:\n01.09.2015; 24.04.2025\nАбо одну дату, якщо працюєте досі."
         })
 
-    # Основна GPT-логіка
+    # Якщо користувач у режимі введення дат
+    if user_state.get(user_id) == "awaiting_seniority_input":
+        reply = calculate_seniority_input(message)
+        user_state.pop(user_id, None)
+        return jsonify({"method": "sendMessage", "chat_id": chat_id, "text": reply})
+
+    # Якщо вибір "Контакти профспілки"
+    if message.strip() == "📞 Контакти профспілки":
+        return jsonify({
+            "method": "sendMessage",
+            "chat_id": chat_id,
+            "text": "📍 Дніпро, пр. Д.Яворницького, 93, оф. 327\n📞 050 324-54-11\n📧 profpmgu@gmail.com\n🌐 http://pmguinfo.dp.ua"
+        })
+
+    # Якщо вибір "Задати питання" або будь-яке інше повідомлення
     reply = ask_gpt(message)
     return jsonify({"method": "sendMessage", "chat_id": chat_id, "text": reply})
 
@@ -64,5 +88,3 @@ def ask_gpt(message):
             "📞 050 324-54-11\n"
             "📧 profpmgu@gmail.com"
         )
-    except Exception as e:
-        return f"⚠️ Виникла помилка: {str(e)}"
