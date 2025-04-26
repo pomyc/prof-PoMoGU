@@ -1,5 +1,4 @@
 from datetime import datetime
-from telegram import ReplyKeyboardRemove
 
 def calculate_seniority(start_date_str, end_date_str=None):
     try:
