@@ -2,9 +2,21 @@ import os
 import openai
 from flask import jsonify
 from seniority_calculator import calculate_seniority
+import chromadb
+from chromadb.config import Settings
 
+# Підключення OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# Ініціалізація локальної бази знань ChromaDB
+chroma_client = chromadb.Client(Settings(
+    persist_directory="./knowledge_base",
+    chroma_db_impl="duckdb+parquet"
+))
+
+collection = chroma_client.get_or_create_collection(name="prof_union_knowledge")
+
+# Стани користувачів (для правильної обробки стажу чи бази знань)
 user_state = {}
 
 def handle_message(data):
@@ -12,16 +24,17 @@ def handle_message(data):
     chat_id = data['message']['chat']['id']
     user_id = data['message']['from']['id']
 
-    # Якщо /start — показати меню
+    # Якщо старт або початок роботи
     if message.strip().lower() in ["/start", "start"]:
         return jsonify({
             "method": "sendMessage",
             "chat_id": chat_id,
-            "text": "👋 Вітаю! Я профспілковий помічник.\nОберіть потрібну дію:",
+            "text": "👋 Вітаю! Я профспілковий помічник. Оберіть дію:",
             "reply_markup": {
                 "keyboard": [
                     [{"text": "📋 Задати питання"}],
                     [{"text": "📅 Розрахунок трудового стажу"}],
+                    [{"text": "📚 Запит до профспілкової БД"}],
                     [{"text": "📞 Контакти профспілки"}]
                 ],
                 "resize_keyboard": True,
@@ -29,22 +42,21 @@ def handle_message(data):
             }
         })
 
-    # Якщо вибір "Розрахунок трудового стажу"
+    # Якщо користувач обирає "Розрахунок трудового стажу"
     if message.strip() == "📅 Розрахунок трудового стажу":
         user_state[user_id] = "awaiting_seniority_input"
         return jsonify({
             "method": "sendMessage",
             "chat_id": chat_id,
-            "text": "📅 Введіть дату початку та дату завершення роботи через крапку з комами.\nНаприклад:\n01.09.2015; 24.04.2025\nАбо одну дату, якщо працюєте досі."
+            "text": "📅 Введіть дату початку та дату завершення роботи через крапку з комою (;).\nПриклад:\n01.09.2015; 24.04.2025\nАбо одну дату, якщо працюєте досі."
         })
 
-    # Якщо користувач у режимі введення дат
     if user_state.get(user_id) == "awaiting_seniority_input":
         reply = calculate_seniority_input(message)
         user_state.pop(user_id, None)
         return jsonify({"method": "sendMessage", "chat_id": chat_id, "text": reply})
 
-    # Якщо вибір "Контакти профспілки"
+    # Якщо користувач обирає "Контакти профспілки"
     if message.strip() == "📞 Контакти профспілки":
         return jsonify({
             "method": "sendMessage",
@@ -52,7 +64,21 @@ def handle_message(data):
             "text": "📍 Дніпро, пр. Д.Яворницького, 93, оф. 327\n📞 050 324-54-11\n📧 profpmgu@gmail.com\n🌐 http://pmguinfo.dp.ua"
         })
 
-    # Якщо вибір "Задати питання" або будь-яке інше повідомлення
+    # Якщо користувач обирає "Запит до профспілкової БД"
+    if message.strip() == "📚 Запит до профспілкової БД":
+        user_state[user_id] = "awaiting_knowledge_query"
+        return jsonify({
+            "method": "sendMessage",
+            "chat_id": chat_id,
+            "text": "📚 Введіть Ваше питання для пошуку у базі знань:"
+        })
+
+    if user_state.get(user_id) == "awaiting_knowledge_query":
+        reply = search_in_knowledge_base(message)
+        user_state.pop(user_id, None)
+        return jsonify({"method": "sendMessage", "chat_id": chat_id, "text": reply})
+
+    # В іншому випадку — працює як "Задати питання" через GPT
     reply = ask_gpt(message)
     return jsonify({"method": "sendMessage", "chat_id": chat_id, "text": reply})
 
@@ -65,8 +91,8 @@ def calculate_seniority_input(message):
             return calculate_seniority(message.strip())
     except Exception as e:
         return (
-            "⚠️ Невірний формат. Переконайтесь, що ви ввели дати у форматі ДД.ММ.РРРР\n"
-            "Наприклад: 01.09.2015; 24.04.2025"
+            "⚠️ Невірний формат. Переконайтесь, що Ви ввели дати у форматі ДД.ММ.РРРР.\n"
+            "Приклад: 01.09.2015; 24.04.2025"
         )
 
 def ask_gpt(message):
@@ -88,3 +114,25 @@ def ask_gpt(message):
             "📞 050 324-54-11\n"
             "📧 profpmgu@gmail.com"
         )
+
+def search_in_knowledge_base(query):
+    try:
+        results = collection.query(
+            query_texts=[query],
+            n_results=1
+        )
+        documents = results.get('documents', [[]])[0]
+
+        if not documents:
+            return "📚 Інформація відсутня у внутрішній базі знань."
+
+        doc_text = documents[0]
+
+        return (
+            f"📚 Відповідь на основі бази знань:\n\n"
+            f"{doc_text}\n\n"
+            f"Джерело: внутрішня база профспілки"
+        )
+    except Exception as e:
+        print(f"❌ Search error: {e}")
+        return "⚠️ Сталася помилка при пошуку у базі знань."
