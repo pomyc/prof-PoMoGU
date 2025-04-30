@@ -48,7 +48,7 @@ def calculate_seniority_input(message):
 def ask_gpt(message):
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "Ви профспілковий помічник. Відповідайте коротко, ввічливо, зрозуміло."},
                 {"role": "user", "content": message}
