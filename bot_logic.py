@@ -44,13 +44,12 @@ def calculate_seniority_input(message):
             "⚠️ Невірний формат. Переконайтесь, що ви ввели дати у форматі ДД.ММ.РРРР\n"
             "Наприклад: 01.09.2015; 24.04.2025"
         )
-
 def ask_gpt(message):
     try:
-response = openai.ChatCompletion.create(
-    model="gpt-4o",
-    temperature=0.3,
-    messages=[
+        response = openai.ChatCompletion.create(
+            model="gpt-4o",
+            temperature=0.4,
+            messages=[
         {
             "role": "system",
             "content": (
