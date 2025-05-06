@@ -49,7 +49,7 @@ def ask_gpt(message):
     try:
 response = openai.ChatCompletion.create(
     model="gpt-4o",
-    temperature=0.4,
+    temperature=0.3,
     messages=[
         {
             "role": "system",
