@@ -47,13 +47,20 @@ def calculate_seniority_input(message):
 
 def ask_gpt(message):
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "Ви профспілковий помічник. Відповідайте коротко, ввічливо, зрозуміло."},
-                {"role": "user", "content": message}
-            ]
-        )
+response = openai.ChatCompletion.create(
+    model="gpt-4o",
+    temperature=0.4,
+    messages=[
+        {
+            "role": "system",
+            "content": (
+                "Ти профспілковий помічник. Відповідай офіційною українською мовою, коротко, чітко й коректно. "
+                "Якщо питання стосується трудових прав, соціальних гарантій або профспілкового захисту — дай конкретну пораду або витяг із законодавства."
+            )
+        },
+        {"role": "user", "content": message}
+    ]
+)
         return response.choices[0].message.content
     except Exception as e:
         print(f"❌ GPT error: {e}")
