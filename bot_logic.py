@@ -13,6 +13,28 @@ def handle_message(data):
     chat_id = data['message']['chat']['id']
     user_id = data['message']['from']['id']
 
+    if message.strip().lower() in ["/start", "start"]:
+        return jsonify({
+            "method": "sendMessage",
+            "chat_id": chat_id,
+            "text": "👋 Вітаю! Я профспілковий помічник. Оберіть дію:",
+            "reply_markup": {
+                "keyboard": [
+                    [{"text": "📋 Задати питання"}],
+                    [{"text": "📅 Розрахунок трудового стажу"}],
+                    [{"text": "📞 Контакти профспілки"}]
+                ],
+                "resize_keyboard": True
+            }
+        })
+
+    if message == "📞 Контакти профспілки":
+        return jsonify({
+            "method": "sendMessage",
+            "chat_id": chat_id,
+            "text": "📍 Дніпро, пр. Д.Яворницького, 93, оф. 327\n📞 050 324-54-11\n📧 profpmgu@gmail.com\n🌐 http://pmguinfo.dp.ua"
+        })
+
     # Якщо користувач у режимі розрахунку стажу
     if user_state.get(user_id) == "awaiting_seniority_input":
         reply = calculate_seniority_input(message)
