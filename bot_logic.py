@@ -35,20 +35,60 @@ def handle_message(data):
             "text": "📍 Дніпро, пр. Д.Яворницького, 93, оф. 327\n📞 050 324-54-11\n📧 profpmgu@gmail.com\n🌐 http://pmguinfo.dp.ua"
         })
 
-    # Якщо користувач у режимі розрахунку стажу
-    if user_state.get(user_id) == "awaiting_seniority_input":
-        reply = calculate_seniority_input(message)
-        user_state.pop(user_id, None)  # Очистити стан
-        return jsonify({"method": "sendMessage", "chat_id": chat_id, "text": reply})
-
-    # Якщо команда /стаж або натискання кнопки
-    if message.strip().lower() in ["/стаж", "розрахунок трудового стажу"]:
+    if message == "📅 Розрахунок трудового стажу":
         user_state[user_id] = "awaiting_seniority_input"
         return jsonify({
             "method": "sendMessage",
             "chat_id": chat_id,
-            "text": "📅 Введіть дату початку та дату завершення роботи через крапку з комами.\nНаприклад:\n01.09.2015; 24.04.2025\nАбо просто одну дату, якщо працюєте досі."
+            "text": "📅 Введіть дату початку та завершення роботи через крапку з комою (;)\nПриклад:\n01.09.2015; 24.04.2025\nабо тільки одну дату, якщо досі працюєте."
         })
+
+    if user_state.get(user_id) == "awaiting_seniority_input":
+        reply = calculate_seniority_input(message)
+        user_state.pop(user_id, None)
+        return jsonify({"method": "sendMessage", "chat_id": chat_id, "text": reply})
+
+    # GPT-відповідь (останнім, якщо нічого не збіглося)
+    reply = ask_gpt(message)
+    return jsonify({"method": "sendMessage", "chat_id": chat_id, "text": reply})def handle_message(data):
+    message = data['message']['text']
+    chat_id = data['message']['chat']['id']
+    user_id = data['message']['from']['id']
+
+    if message.strip().lower() in ["/start", "start"]:
+        return jsonify({
+            "method": "sendMessage",
+            "chat_id": chat_id,
+            "text": "👋 Вітаю! Я профспілковий помічник. Оберіть дію:",
+            "reply_markup": {
+                "keyboard": [
+                    [{"text": "📋 Задати питання"}],
+                    [{"text": "📅 Розрахунок трудового стажу"}],
+                    [{"text": "📞 Контакти профспілки"}]
+                ],
+                "resize_keyboard": True
+            }
+        })
+
+    if message == "📞 Контакти профспілки":
+        return jsonify({
+            "method": "sendMessage",
+            "chat_id": chat_id,
+            "text": "📍 Дніпро, пр. Д.Яворницького, 93, оф. 327\n📞 050 324-54-11\n📧 profpmgu@gmail.com\n🌐 http://pmguinfo.dp.ua"
+        })
+
+    if message == "📅 Розрахунок трудового стажу":
+        user_state[user_id] = "awaiting_seniority_input"
+        return jsonify({
+            "method": "sendMessage",
+            "chat_id": chat_id,
+            "text": "📅 Введіть дату початку та завершення роботи через крапку з комою (;)\nПриклад:\n01.09.2015; 24.04.2025\nабо тільки одну дату, якщо досі працюєте."
+        })
+
+    if user_state.get(user_id) == "awaiting_seniority_input":
+        reply = calculate_seniority_input(message)
+        user_state.pop(user_id, None)
+        return jsonify({"method": "sendMessage", "chat_id": chat_id, "text": reply})
 
     # Основна GPT-логіка
     reply = ask_gpt(message)
