@@ -1,6 +1,5 @@
 from flask import Flask, request
 from bot_logic import handle_message
-from seniority_calculator import calculate_seniority
 import os
 import sys
 import logging
@@ -8,34 +7,6 @@ import logging
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 app = Flask(__name__)
-
-# Простий обробник для запиту розрахунку стажу
-@app.route("/seniority", methods=["POST"])
-def seniority():
-    data = request.get_json()
-    chat_id = data['message']['chat']['id']
-    text = data['message']['text'].strip()
-
-    try:
-        if ";" in text:
-            _, dates = text.split(" ", 1)
-            start_date, end_date = [d.strip() for d in dates.split(";")]
-            reply = calculate_seniority(start_date, end_date)
-        else:
-            _, start_date = text.split(" ", 1)
-            reply = calculate_seniority(start_date.strip())
-
-        return {
-            "method": "sendMessage",
-            "chat_id": chat_id,
-            "text": reply
-        }
-    except Exception as e:
-        return {
-            "method": "sendMessage",
-            "chat_id": chat_id,
-            "text": "⚠️ Невірний формат. Напишіть, наприклад:\n01.09.2015; 24.04.2025"
-        }
 
 @app.route("/", methods=["POST"])
 def webhook():
