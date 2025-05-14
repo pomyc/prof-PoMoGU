@@ -20,9 +20,17 @@ user_state = {}
 
 # Основна функція
 def handle_message(data):
-    message = data['message']['text']
-    chat_id = data['message']['chat']['id']
-    user_id = data['message']['from']['id']
+    message_obj = data.get("message", {})
+    message = message_obj.get("text")
+    chat_id = message_obj.get("chat", {}).get("id")
+    user_id = message_obj.get("from", {}).get("id")
+
+    if not message or not chat_id:
+        return jsonify({
+            "method": "sendMessage",
+            "chat_id": chat_id or 0,
+            "text": "⚠️ Я розумію тільки текстові повідомлення."
+        })
 
     if message.strip().lower() in ["/start", "start"]:
         return jsonify({
