@@ -20,7 +20,7 @@ def handle_message(data):
     message = data['message']['text']
     chat_id = data['message']['chat']['id']
     user_id = data['message']['from']['id']
-    
+  
     # Якщо старт або початок роботи
     if message.strip().lower() in ["/start", "start"]:
         return jsonify({
@@ -47,13 +47,13 @@ def handle_message(data):
         })
         
   # Якщо користувач обирає "Запит до бази знань"
-if message == "📚 Запит до бази знань":
-    user_state[user_id] = "awaiting_knowledge_query"
-    return jsonify({
-        "method": "sendMessage",
-        "chat_id": chat_id,
-        "text": "📚 Введіть запит, і я спробую знайти відповідь у базі знань:"
-    })
+    if message == "📚 Запит до бази знань":
+        user_state[user_id] = "awaiting_knowledge_query"
+        return jsonify({
+            "method": "sendMessage",
+            "chat_id": chat_id,
+            "text": "📚 Введіть запит, і я спробую знайти відповідь у базі знань:"
+        })
 
 if user_state.get(user_id) == "awaiting_knowledge_query":
     reply = search_in_knowledge_base(message)
