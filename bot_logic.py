@@ -47,12 +47,12 @@ def handle_message(data):
         })
         
   # Якщо користувач обирає "Запит до бази знань"
-    if message == "📚 Запит до бази знань":
+if message == "📚 Запит до бази знань":
     user_state[user_id] = "awaiting_knowledge_query"
     return jsonify({
         "method": "sendMessage",
         "chat_id": chat_id,
-        "text": "🧠 Введіть ваше запитання, і я спробую знайти відповідь у базі знань:"
+        "text": "📚 Введіть запит, і я спробую знайти відповідь у базі знань:"
     })
 
 if user_state.get(user_id) == "awaiting_knowledge_query":
