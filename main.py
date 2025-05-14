@@ -10,7 +10,7 @@ from bot_logic import handle_message
 def download_and_extract_kb():
     kb_dir = "./knowledge_base"
     zip_path = "knowledge_base.zip"
-    url = "https://www.dropbox.com/scl/fi/9fudqmgmqdzk70fqgo8nw/knowledge_base.zip?rlkey=ft9yyx596if4twx2yg44omq34&st=uwz3607e&dl=1"
+    url = "https://www.dropbox.com/scl/fi/29q6fqw8jsjluwiqew9m3/knowledge_base.zip?rlkey=ugu9y504i87ckddmdtzw1tocg&st=9cqwrjuh&dl=1"
 
     if not os.path.exists(kb_dir):
         print("📦 Завантажую базу знань з Dropbox...")
