@@ -45,7 +45,8 @@ def handle_message(data):
             "chat_id": chat_id,
             "text": "📍 Дніпро, пр. Д.Яворницького, 93, оф. 327\n📞 050 324-54-11\n📧 profpmgu@gmail.com\n🌐 http://pmguinfo.dp.ua"
         })
-
+        
+  # Якщо користувач обирає "Запит до бази знань"
     if message == "📚 Запит до бази знань":
     user_state[user_id] = "awaiting_knowledge_query"
     return jsonify({
