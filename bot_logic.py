@@ -147,5 +147,4 @@ def search_in_knowledge_base(query):
     except Exception as e:
         print(f"❌ DB error: {e}")
         return "⚠️ Сталася помилка при пошуку в базі знань."
-        
         print("🧠 Всього документів у базі:", collection.count())
