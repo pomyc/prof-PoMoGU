@@ -23,6 +23,9 @@ def download_and_extract_kb():
             zip_ref.extractall(".")
         print("✅ База знань готова!")
 
+from bot_logic import handle_message, collection
+print("🧠 Всього документів у базі:", collection.count())
+
 # Виклик перед запуском Flask
 download_and_extract_kb()
 
