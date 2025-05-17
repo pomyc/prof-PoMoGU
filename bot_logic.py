@@ -2,8 +2,8 @@ import os
 import openai
 from flask import jsonify
 from seniority_calculator import calculate_seniority
-import chromadb
 from chromadb.config import Settings
+import chromadb
 
 # API ключ OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")
