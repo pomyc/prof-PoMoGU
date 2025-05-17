@@ -11,6 +11,11 @@ def download_and_extract_kb():
     zip_path = "knowledge_base.zip"
     url = "https://www.dropbox.com/scl/fi/f49pgxwk6faq87eintjhw/knowledge_base.zip?rlkey=wxthl4bukaipjb2zk1fbd1n8x&st=tfg6lol2&dl=1"
 
+    # 🔥 Видаляємо стару базу, якщо є
+    if os.path.exists(kb_dir):
+        import shutil
+        shutil.rmtree(kb_dir)
+        
     if not os.path.exists(os.path.join(kb_dir, "chroma.sqlite3")):
         print("📦 Завантажую базу знань з Dropbox...")
         r = requests.get(url)
