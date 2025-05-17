@@ -4,9 +4,8 @@ import logging
 import requests
 import zipfile
 from flask import Flask, request
-from bot_logic import handle_message
 
-# 📦 Автоматичне завантаження та розпакування бази знань
+# 📦 Завантаження бази знань
 def download_and_extract_kb():
     kb_dir = "./knowledge_base"
     zip_path = "knowledge_base.zip"
@@ -23,11 +22,13 @@ def download_and_extract_kb():
             zip_ref.extractall(".")
         print("✅ База знань готова!")
 
-from bot_logic import handle_message, collection
-print("🧠 Всього документів у базі:", collection.count())
-
-# Виклик перед запуском Flask
+# 🛠️ Спочатку завантаж базу:
 download_and_extract_kb()
+
+# ✅ Лише після цього імпортуй логіку бота:
+from bot_logic import handle_message, collection
+
+print("🧠 Всього документів у базі:", collection.count())
 
 # Flask
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
