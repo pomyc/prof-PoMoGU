@@ -10,7 +10,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Ініціалізація ChromaDB
 chroma_client = chromadb.Client(Settings(
-    persist_directory="./knowledge_base",
+    persist_directory="D:/HELP/AI/chat-bot/knowledge_base",
     chroma_db_impl="duckdb+parquet"
 ))
 collection = chroma_client.get_or_create_collection(name="prof_union_knowledge")
