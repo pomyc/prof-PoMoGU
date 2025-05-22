@@ -9,7 +9,7 @@ from flask import Flask, request
 def download_and_extract_kb():
     kb_dir = "./knowledge_base"
     zip_path = "knowledge_base.zip"
-    url = "https://www.dropbox.com/scl/fi/f49pgxwk6faq87eintjhw/knowledge_base.zip?rlkey=wxthl4bukaipjb2zk1fbd1n8x&st=tfg6lol2&dl=1"
+    url = "https://www.dropbox.com/scl/fi/nci5cvxjdifaw4kdb62ox/knowledge_base.zip?rlkey=xbx8ts6snx8c86br4mf8iw9if&st=dcrx64a1&dl=1"
 
     # 🔥 Видаляємо стару базу, якщо є
     if os.path.exists(kb_dir):
