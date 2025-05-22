@@ -14,6 +14,7 @@ chroma_client = chromadb.Client(Settings(
     chroma_db_impl="duckdb+parquet"
 ))
 collection = chroma_client.get_or_create_collection(name="prof_union_knowledge")
+print("📦 Завантажено документів у колекції:", collection.count())
 
 # Стан користувачів
 user_state = {}
