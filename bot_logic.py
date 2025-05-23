@@ -4,9 +4,11 @@ from flask import jsonify
 from seniority_calculator import calculate_seniority
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
+from dotenv import load_dotenv
 
 # API ключ OpenAI
-openai.api_key = os.getenv("OPENAI_API_KEY")
+load_dotenv()  # Загружает переменные из .env файла
+openai_api_key = os.getenv('OPENAI_API_KEY')
 
 # Ініціалізація FAISS векторної бази
 try:
