@@ -4,6 +4,7 @@ import logging
 import requests
 import zipfile
 from flask import Flask, request
+from bot_logic import handle_message  # Добавляем импорт функции
 
 # Flask
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
