@@ -12,7 +12,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 try:
     embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
     vectorstore = FAISS.load_local(
-        "D:/HELP/AI/chat-bot/knowledge_base", 
+        "./knowledge_base", 
         embeddings,
         allow_dangerous_deserialization=True
     )
