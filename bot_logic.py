@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 # API ключ OpenAI
-load_dotenv()  # Загружает переменные из .env файла
 openai_api_key = os.getenv('OPENAI_API_KEY')
 client = OpenAI(api_key=openai_api_key)
 
