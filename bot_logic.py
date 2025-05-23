@@ -9,6 +9,10 @@ from dotenv import load_dotenv
 # API ключ OpenAI
 load_dotenv()  # Загружает переменные из .env файла
 openai_api_key = os.getenv('OPENAI_API_KEY')
+if not openai_api_key:
+    print("❌ OpenAI API key not found!")
+else:
+    print(f"✅ OpenAI API key loaded: {openai_api_key[:10]}...")
 
 # Ініціалізація FAISS векторної бази
 try:
