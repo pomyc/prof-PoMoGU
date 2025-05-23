@@ -1,14 +1,16 @@
 import os
-import openai
 from flask import jsonify
 from seniority_calculator import calculate_seniority
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
+from openai import OpenAI
 
 # API ключ OpenAI
 load_dotenv()  # Загружает переменные из .env файла
 openai_api_key = os.getenv('OPENAI_API_KEY')
+client = OpenAI(api_key=openai_api_key)
+
 if not openai_api_key:
     print("❌ OpenAI API key not found!")
 else:
@@ -16,7 +18,7 @@ else:
 
 # Ініціалізація FAISS векторної бази
 try:
-    embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+    embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
     vectorstore = FAISS.load_local(
         "./knowledge_base", 
         embeddings,
@@ -143,7 +145,8 @@ def ask_gpt(message):
 
         user_message = message + context
 
-        response = openai.ChatCompletion.create(
+        # ИСПРАВЛЕНО: Заменили старый API на новый
+        response = client.chat.completions.create(
             model="gpt-4o",
             temperature=0.3,
             messages=[
@@ -226,14 +229,15 @@ def ask_gpt_with_context(message, use_knowledge_base=True):
         if context:
             user_message += f"\n\n{context}"
 
-        response = openai.ChatCompletion.create(
+        # ИСПРАВЛЕНО: Заменили старый API на новый
+        response = client.chat.completions.create(
             model="gpt-4o",
-            temperature=0.2,
-            max_tokens=1000,
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message}
-            ]
+            ],
+            max_tokens=1000,
+            temperature=0.3
         )
         
         return response.choices[0].message.content
@@ -247,3 +251,28 @@ def ask_gpt_with_context(message, use_knowledge_base=True):
             "📞 050 324-54-11\n"
             "📧 profpmgu@gmail.com"
         )
+
+def get_openai_response(user_message, context=""):
+    try:
+        messages = [
+            {"role": "system", "content": "Ти - корисний асистент, який допомагає користувачам з їхніми питаннями."},
+        ]
+        
+        if context:
+            messages.append({"role": "system", "content": f"Контекст з бази знань: {context}"})
+        
+        messages.append({"role": "user", "content": user_message})
+        
+        # ИСПРАВЛЕНО: Заменили старый API на новый
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            max_tokens=1000,
+            temperature=0.3
+        )
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        print(f"❌ GPT error: {e}")
+        return "Вибач, сталася помилка при обробці твого запиту."
