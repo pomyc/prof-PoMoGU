@@ -7,7 +7,6 @@ from langchain_openai import OpenAIEmbeddings
 
 # API ключ OpenAI
 openai.api_key = os.getenv("OPENAI_API_KEY")
-OPENAI_API_KEY = "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"
 
 # Ініціалізація FAISS векторної бази
 try:
