@@ -145,124 +145,94 @@ def extract_key_concepts(query):
     return found_concepts
 
 def calculate_semantic_relevance(result, query, query_concepts):
-    """Более мягкая оценка семантической релевантности"""
+    """Простая и эффективная оценка релевантности"""
     content = result.page_content.lower()
     source = result.metadata.get('source', '').lower()
+    query_lower = query.lower()
     
     score = 0
     
-    # Проверяем соответствие основных концепций
-    content_concepts = extract_key_concepts(content)
+    # Прямой поиск ключевых слов из запроса
+    query_words = re.findall(r'\w+', query_lower)
+    content_words = re.findall(r'\w+', content)
     
-    # Высокий балл за совпадение ключевых концепций
-    common_concepts = set(query_concepts) & set(content_concepts)
-    score += len(common_concepts) * 30  # Снижено с 50
+    # Базовый балл за совпадения слов
+    for word in query_words:
+        if len(word) > 2:  # Игнорируем короткие слова
+            if word in content_words:
+                score += 10
     
-    # Специальная проверка для вопросов о взносах
-    if 'взносы' in query_concepts:
-        money_keywords = ['грн', 'гривень', 'копійок', 'процент', '%', 'розмір', 'сума', 'ставка', 'тариф', 'внесок', 'плата']
-        if any(keyword in content for keyword in money_keywords):
-            score += 50  # Снижено со 100
+    # Специальная обработка для вопросов о взносах
+    if any(word in query_lower for word in ['внесок', 'внески', 'взнос', 'плата', 'розмір', 'сума']):
+        # Высокий бонус за финансовые термины
+        financial_terms = ['внесок', 'внески', 'плата', 'сума', 'розмір', 'грн', 'гривень', 'процент', '%', 'ставка', 'тариф', 'оплата', 'кошти']
+        financial_score = sum(10 for term in financial_terms if term in content)
+        score += financial_score
         
-        # Более мягкий штраф за документы о выборах
-        if 'выборы' in content_concepts and 'взносы' not in content_concepts:
-            score -= 30  # Снижено с 200
+        # Бонус за источник "статут"
+        if 'статут' in source:
+            score += 50
+        
+        # Строгий штраф только за чисто избирательные документы
+        election_only_terms = ['голосування', 'кандидат', 'бюлетень', 'виборча комісія', 'підрахунок голосів']
+        if any(term in content for term in election_only_terms) and financial_score == 0:
+            score -= 100
     
-    # Проверяем релевантность источника
-    if 'взносы' in query_concepts:
-        if any(word in source for word in ['внесок', 'плата', 'фінанс', 'бюджет', 'сума']):
-            score += 20  # Снижено с 30
-        if any(word in source for word in ['вибор', 'звіт']):
-            score -= 15  # Снижено с 50
+    # Бонус за профсоюзные термины
+    union_terms = ['профспілка', 'профком', 'металург', 'гірник', 'член', 'організація']
+    for term in union_terms:
+        if term in query_lower and term in content:
+            score += 5
     
-    # Точные текстовые совпадения
-    query_words = set(re.findall(r'\w+', query.lower()))
-    content_words = set(re.findall(r'\w+', content))
-    
-    exact_matches = query_words & content_words
-    score += len(exact_matches) * 3  # Снижено с 5
-    
-    # Дополнительные бонусы для общих профсоюзных терминов
-    union_terms = ['профспілка', 'профком', 'металург', 'гірник', 'працівник', 'член']
-    query_union_terms = [term for term in union_terms if term in query.lower()]
-    content_union_terms = [term for term in union_terms if term in content]
-    
-    if query_union_terms and content_union_terms:
-        score += len(set(query_union_terms) & set(content_union_terms)) * 10
-    
+    print(f"🔢 Файл: {source}, балл: {score}")
     return score
 
 def search_in_knowledge_base(query):
-    """Многоуровневый поиск в базе знаний"""
+    """Простой и эффективный поиск в базе знаний"""
     try:
         if not vectorstore:
             return "⚠️ База знань недоступна. Спробуйте пізніше."
         
         print(f"🔍 Пошук у базі знань: {query}")
         
-        # Извлекаем ключевые концепции из запроса
-        query_concepts = extract_key_concepts(query)
-        print(f"🎯 Виявлені концепції: {query_concepts}")
-        
-        # Выполняем поиск с большим количеством результатов
-        results = vectorstore.similarity_search(query, k=15)
+        # Выполняем векторный поиск
+        results = vectorstore.similarity_search(query, k=20)
         
         if not results:
             return "📚 У базі знань не знайдено відповіді на це питання."
         
-        # Вычисляем семантическую релевантность
+        # Простая оценка релевантности
         scored_results = []
         for result in results:
-            score = calculate_semantic_relevance(result, query, query_concepts)
+            score = calculate_semantic_relevance(result, query, [])
             scored_results.append((result, score))
-            print(f"📄 {result.metadata.get('source', 'unknown')}: score={score}")
         
         # Сортируем по релевантности
         scored_results.sort(key=lambda x: x[1], reverse=True)
         
-        # Многоуровневый отбор результатов
-        high_relevance = [result for result, score in scored_results if score >= 50][:3]
-        medium_relevance = [result for result, score in scored_results if 20 <= score < 50][:3]
-        low_relevance = [result for result, score in scored_results if 5 <= score < 20][:2]
+        # Показываем топ результаты с положительным баллом
+        good_results = [result for result, score in scored_results if score > 0][:3]
         
-        # Выбираем лучшие доступные результаты
-        if high_relevance:
-            selected_results = high_relevance
-            confidence = "висока"
-        elif medium_relevance:
-            selected_results = medium_relevance
-            confidence = "середня"
-        elif low_relevance:
-            selected_results = low_relevance
-            confidence = "низька"
-        else:
-            return "📚 Не знайдено релевантної інформації для вашого запиту. Спробуйте перефразувати питання або звернутися безпосередньо до профспілки."
+        if not good_results:
+            # Если нет хороших результатов, берем лучшие из всех
+            good_results = [result for result, score in scored_results[:3]]
         
-        # Формируем ответ с указанием уровня соответствия
-        if confidence == "висока":
-            response = "📖 Знайдена релевантна інформація з бази знань:\n\n"
-        elif confidence == "середня":
-            response = "📖 Знайдена частково релевантна інформація з бази знань:\n\n"
-        else:
-            response = "📖 Знайдена загальна інформація з бази знань (можливо потребує уточнення):\n\n"
+        # Формируем ответ
+        response = "📖 Знайдена інформація з бази знань:\n\n"
         
-        for i, result in enumerate(selected_results, 1):
+        for i, result in enumerate(good_results, 1):
             source = result.metadata.get('source', 'Невідоме джерело')
             content = result.page_content.strip()
             
             # Ограничиваем длину контента
-            if len(content) > 400:
-                content = content[:400] + "..."
+            if len(content) > 500:
+                content = content[:500] + "..."
             
             response += f"📄 Джерело: {source}\n"
             response += f"{content}\n"
             
-            if i < len(selected_results):
+            if i < len(good_results):
                 response += "\n" + "="*30 + "\n\n"
-        
-        # Добавляем рекомендацию при низкой релевантности
-        if confidence == "низька":
-            response += "\n\n💡 Для більш точної інформації рекомендую звернутися безпосередньо до профспілки."
         
         return response
         
