@@ -33,7 +33,7 @@ except Exception as e:
 # Стан користувачів
 user_state = {}
 
-# Основна функція
+# Основная функция
 def handle_message(data):
     message_obj = data.get("message", {})
     message = message_obj.get("text")
@@ -123,72 +123,58 @@ def calculate_seniority_input(message):
     except Exception:
         return "⚠️ Невірний формат. Напишіть, наприклад:\n01.09.2015; 24.04.2025"
 
-def extract_key_concepts(query):
-    """Извлекает ключевые концепции из запроса"""
-    query_lower = query.lower()
-    
-    concepts = {
-        'взносы': ['внесок', 'внески', 'взнос', 'плата', 'платіж', 'оплата', 'кошти', 'сума', 'розмір'],
-        'выборы': ['вибори', 'виборча', 'звітно-виборча', 'кампанія', 'голосування'],
-        'отпуск': ['відпустка', 'відпочинок', 'канікули'],
-        'увольнение': ['звільнення', 'розірвання', 'припинення'],
-        'зарплата': ['зарплата', 'заробітна плата', 'оплата праці', 'винагорода'],
-        'работа': ['робота', 'праця', 'трудовий', 'службовий'],
-        'профсоюз': ['профспілка', 'профком', 'організація']
-    }
-    
-    found_concepts = []
-    for concept, keywords in concepts.items():
-        if any(keyword in query_lower for keyword in keywords):
-            found_concepts.append(concept)
-    
-    return found_concepts
-
-def calculate_semantic_relevance(result, query, query_concepts):
-    """Простая и эффективная оценка релевантности"""
+def calculate_relevance_score(result, query):
+    """Улучшенная система оценки релевантности"""
     content = result.page_content.lower()
     source = result.metadata.get('source', '').lower()
     query_lower = query.lower()
     
     score = 0
     
-    # Прямой поиск ключевых слов из запроса
-    query_words = re.findall(r'\w+', query_lower)
-    content_words = re.findall(r'\w+', content)
+    # Извлекаем слова из запроса (исключая короткие)
+    query_words = [word for word in re.findall(r'\w+', query_lower) if len(word) > 2]
     
-    # Базовый балл за совпадения слов
+    # Базовые совпадения слов
     for word in query_words:
-        if len(word) > 2:  # Игнорируем короткие слова
-            if word in content_words:
-                score += 10
+        if word in content:
+            score += 5
     
     # Специальная обработка для вопросов о взносах
-    if any(word in query_lower for word in ['внесок', 'внески', 'взнос', 'плата', 'розмір', 'сума']):
-        # Высокий бонус за финансовые термины
-        financial_terms = ['внесок', 'внески', 'плата', 'сума', 'розмір', 'грн', 'гривень', 'процент', '%', 'ставка', 'тариф', 'оплата', 'кошти']
-        financial_score = sum(10 for term in financial_terms if term in content)
-        score += financial_score
+    dues_keywords = ['внесок', 'внески', 'взнос', 'плата', 'розмір', 'сума', 'скільки', 'який розмір']
+    financial_terms = ['внесок', 'внески', 'плата', 'сума', 'розмір', 'грн', 'гривень', 'процент', '%', 'ставка', 'тариф', 'оплата', 'кошти']
+    
+    is_dues_query = any(keyword in query_lower for keyword in dues_keywords)
+    has_financial_content = any(term in content for term in financial_terms)
+    
+    if is_dues_query:
+        if has_financial_content:
+            score += 50  # Большой бонус за финансовый контент
+            
+            # Дополнительный бонус за источник "статут"
+            if 'статут' in source:
+                score += 30
         
-        # Бонус за источник "статут"
-        if 'статут' in source:
-            score += 50
-        
-        # Строгий штраф только за чисто избирательные документы
-        election_only_terms = ['голосування', 'кандидат', 'бюлетень', 'виборча комісія', 'підрахунок голосів']
-        if any(term in content for term in election_only_terms) and financial_score == 0:
-            score -= 100
+        # ЖЕСТКИЙ штраф за избирательные документы для вопросов о взносах
+        election_terms = ['вибори', 'виборча', 'звітно-виборча', 'голосування', 'кандидат', 'бюлетень']
+        if any(term in content for term in election_terms):
+            score -= 100  # Очень большой штраф
+    
+    # Штраф за избирательные документы для общих вопросов
+    if 'vybory' in source or 'вибори' in source:
+        if not is_dues_query:
+            score -= 20
     
     # Бонус за профсоюзные термины
     union_terms = ['профспілка', 'профком', 'металург', 'гірник', 'член', 'організація']
     for term in union_terms:
         if term in query_lower and term in content:
-            score += 5
+            score += 3
     
-    print(f"🔢 Файл: {source}, балл: {score}")
+    print(f"🔢 Файл: {source}, запрос: '{query[:30]}...', балл: {score}")
     return score
 
 def search_in_knowledge_base(query):
-    """Простой и эффективный поиск в базе знаний"""
+    """Поиск в базе знаний с улучшенной фильтрацией"""
     try:
         if not vectorstore:
             return "⚠️ База знань недоступна. Спробуйте пізніше."
@@ -196,42 +182,46 @@ def search_in_knowledge_base(query):
         print(f"🔍 Пошук у базі знань: {query}")
         
         # Выполняем векторный поиск
-        results = vectorstore.similarity_search(query, k=20)
+        results = vectorstore.similarity_search(query, k=15)
         
         if not results:
             return "📚 У базі знань не знайдено відповіді на це питання."
         
-        # Простая оценка релевантности
+        # Оцениваем релевантность каждого результата
         scored_results = []
         for result in results:
-            score = calculate_semantic_relevance(result, query, [])
+            score = calculate_relevance_score(result, query)
             scored_results.append((result, score))
         
         # Сортируем по релевантности
         scored_results.sort(key=lambda x: x[1], reverse=True)
         
-        # Показываем топ результаты с положительным баллом
-        good_results = [result for result, score in scored_results if score > 0][:3]
+        # СТРОГАЯ фильтрация: только результаты с положительным баллом
+        good_results = [(result, score) for result, score in scored_results if score > 0]
+        
+        print(f"📊 Всего результатов: {len(results)}, с положительным баллом: {len(good_results)}")
         
         if not good_results:
-            # Если нет хороших результатов, берем лучшие из всех
-            good_results = [result for result, score in scored_results[:3]]
+            return "📚 У базі знань не знайдено релевантної інформації на це питання."
+        
+        # Берем только топ-3 результата
+        top_results = good_results[:3]
         
         # Формируем ответ
         response = "📖 Знайдена інформація з бази знань:\n\n"
         
-        for i, result in enumerate(good_results, 1):
+        for i, (result, score) in enumerate(top_results, 1):
             source = result.metadata.get('source', 'Невідоме джерело')
             content = result.page_content.strip()
             
             # Ограничиваем длину контента
-            if len(content) > 500:
-                content = content[:500] + "..."
+            if len(content) > 400:
+                content = content[:400] + "..."
             
-            response += f"📄 Джерело: {source}\n"
+            response += f"📄 Джерело: {source} (релевантність: {score})\n"
             response += f"{content}\n"
             
-            if i < len(good_results):
+            if i < len(top_results):
                 response += "\n" + "="*30 + "\n\n"
         
         return response
@@ -241,37 +231,38 @@ def search_in_knowledge_base(query):
         return "⚠️ Сталася помилка при пошуку в базі знань."
 
 def ask_gpt_with_smart_context(message):
-    """GPT с улучшенным семантическим контекстом"""
+    """GPT с улучшенным контекстом"""
     try:
         context = ""
         
         if vectorstore:
             try:
-                # Извлекаем концепции из запроса
-                query_concepts = extract_key_concepts(message)
-                
                 # Выполняем семантический поиск
                 results = vectorstore.similarity_search(message, k=10)
                 
                 if results:
-                    # Оцениваем семантическую релевантность
+                    # Оцениваем релевантность
                     scored_results = []
                     for result in results:
-                        score = calculate_semantic_relevance(result, message, query_concepts)
+                        score = calculate_relevance_score(result, message)
                         scored_results.append((result, score))
                     
-                    # Берем релевантные результаты с более мягкими критериями
-                    min_score = 15 if query_concepts else 10  # Снижено с 30/15
-                    relevant_results = [result for result, score in scored_results if score >= min_score][:2]
+                    # СТРОГИЙ порог релевантности
+                    min_score = 25  # Увеличили порог
+                    relevant_results = [(result, score) for result, score in scored_results if score >= min_score]
                     
                     if relevant_results:
+                        # Берем только топ-2 самых релевантных
+                        relevant_results.sort(key=lambda x: x[1], reverse=True)
+                        top_relevant = relevant_results[:2]
+                        
                         context = "\n\nРелевантна інформація з бази знань:\n"
-                        for result in relevant_results:
+                        for result, score in top_relevant:
                             source = result.metadata.get('source', 'документ')
-                            content = result.page_content[:400]
-                            context += f"З {source}: {content}...\n\n"
+                            content = result.page_content[:300]
+                            context += f"З {source} (релевантність: {score}): {content}...\n\n"
                     else:
-                        print("⚠️ Не знайдено релевантного контексту")
+                        print("⚠️ Не знайдено релевантного контексту (мінімальний бал 25)")
             except Exception as e:
                 print(f"⚠️ Помилка пошуку контексту: {e}")
 
