@@ -1,10 +1,12 @@
 import os
+import re
 from flask import jsonify
 from seniority_calculator import calculate_seniority
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 from openai import OpenAI
+from collections import Counter
 
 # API ключ OpenAI
 openai_api_key = os.getenv('OPENAI_API_KEY')
@@ -103,7 +105,7 @@ def handle_message(data):
         })
 
     # GPT — основна відповідь
-    reply = ask_gpt(message)
+    reply = ask_gpt_with_smart_context(message)
     return jsonify({
         "method": "sendMessage",
         "chat_id": chat_id,
@@ -122,73 +124,116 @@ def calculate_seniority_input(message):
         return "⚠️ Невірний формат. Напишіть, наприклад:\n01.09.2015; 24.04.2025"
 
 # GPT-відповідь з використанням контексту з бази знань
-def ask_gpt(message):
-    try:
-        # Спробуємо знайти релевантну інформацію в базі знань
-        context = ""
-        if vectorstore:
-            try:
-                results = vectorstore.similarity_search(message, k=2)
-                if results:
-                    context = "\n\nДодаткова інформація з бази знань:\n"
-                    for result in results:
-                        context += f"- {result.page_content[:300]}...\n"
-            except Exception as e:
-                print(f"⚠️ Помилка пошуку в базі знань: {e}")
+def preprocess_query(query):
+    """Предобработка запроса для улучшения поиска"""
+    # Приводим к нижнему регистру
+    query = query.lower()
+    
+    # Удаляем лишние пробелы и знаки препинания
+    query = re.sub(r'[^\w\s]', ' ', query)
+    query = re.sub(r'\s+', ' ', query).strip()
+    
+    # Извлекаем ключевые слова
+    keywords = query.split()
+    
+    # Словарь синонимов для улучшения поиска
+    synonyms = {
+        'внески': ['внесок', 'плата', 'взнос', 'оплата', 'кошти'],
+        'розмір': ['сума', 'величина', 'розмір', 'кількість'],
+        'профспілкові': ['профспілка', 'профком', 'організація'],
+        'зарплата': ['заробітна плата', 'оплата праці', 'винагорода'],
+        'відпустка': ['відпочинок', 'канікули', 'вихідні'],
+        'звільнення': ['розірвання', 'припинення', 'закінчення']
+    }
+    
+    # Расширяем запрос синонимами
+    expanded_keywords = keywords.copy()
+    for keyword in keywords:
+        for base_word, synonym_list in synonyms.items():
+            if keyword in synonym_list or keyword == base_word:
+                expanded_keywords.extend(synonym_list)
+    
+    return ' '.join(list(set(expanded_keywords)))
 
-        system_message = (
-            "Ти профспілковий помічник. Відповідай офіційною українською мовою, посилаючись на статті КЗпП, якщо це можливо. "
-            "Наприклад: 'Відповідно до ст. 21 КЗпП України...' Якщо не знаєш відповіді, напиши, що потрібно звернутися за консультацією до юриста профспілки. "
-            "Якщо питання стосується трудових прав, соціальних гарантій або профспілкового захисту — дай конкретну відповідь та посилання на норми законодавства."
-        )
+def calculate_relevance_score(result, query_keywords):
+    """Вычисляет релевантность результата"""
+    content = result.page_content.lower()
+    query_words = query_keywords.lower().split()
+    
+    score = 0
+    content_words = re.findall(r'\w+', content)
+    content_counter = Counter(content_words)
+    
+    for word in query_words:
+        if len(word) > 2:  # Игнорируем слишком короткие слова
+            # Точное совпадение
+            if word in content_words:
+                score += 10
+            
+            # Частичное совпадение
+            for content_word in content_words:
+                if word in content_word or content_word in word:
+                    score += 5
+    
+    # Бонус за источник
+    source = result.metadata.get('source', '').lower()
+    if any(keyword in source for keyword in ['внесок', 'платіж', 'сума', 'розмір']):
+        score += 15
+    
+    return score
 
-        user_message = message + context
-
-        # ИСПРАВЛЕНО: Заменили старый API на новый
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            temperature=0.3,
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message}
-            ]
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        print(f"❌ GPT error: {e}")
-        return (
-            "🔍 Не вдалося отримати відповідь.\n"
-            "📍 Зверніться до профспілки:\n"
-            "Дніпро, пр. Д.Яворницького, 93, к.327\n"
-            "📞 050 324-54-11\n"
-            "📧 profpmgu@gmail.com"
-        )
-
-# Пошук у локальній базі знань з FAISS
 def search_in_knowledge_base(query):
+    """Улучшенный поиск в базе знаний"""
     try:
         if not vectorstore:
             return "⚠️ База знань недоступна. Спробуйте пізніше."
         
         print(f"🔍 Пошук у базі знань: {query}")
         
-        # Пошук найбільш релевантних документів
-        results = vectorstore.similarity_search(query, k=3)
+        # Предобработка запроса
+        processed_query = preprocess_query(query)
+        print(f"🔄 Обработанный запрос: {processed_query}")
+        
+        # Увеличиваем количество результатов для лучшей фильтрации
+        results = vectorstore.similarity_search(processed_query, k=10)
+        
+        if not results:
+            # Пробуем поиск по оригинальному запросу
+            results = vectorstore.similarity_search(query, k=10)
         
         if not results:
             return "📚 У базі знань не знайдено відповіді на це питання."
         
-        # Формуємо відповідь з найкращих результатів
-        response = "📖 Знайдено в базі знань:\n\n"
+        # Вычисляем релевантность и сортируем
+        scored_results = []
+        for result in results:
+            score = calculate_relevance_score(result, query + ' ' + processed_query)
+            scored_results.append((result, score))
         
-        for i, result in enumerate(results, 1):
+        # Сортируем по релевантности
+        scored_results.sort(key=lambda x: x[1], reverse=True)
+        
+        # Берем только самые релевантные (с минимальным порогом)
+        relevant_results = [result for result, score in scored_results if score > 5][:3]
+        
+        if not relevant_results:
+            return "📚 Не знайдено релевантної інформації в базі знань. Спробуйте перефразувати питання."
+        
+        # Формируем ответ
+        response = "📖 Найкраща відповідь з бази знань:\n\n"
+        
+        for i, result in enumerate(relevant_results, 1):
             source = result.metadata.get('source', 'Невідоме джерело')
             content = result.page_content.strip()
+            
+            # Ограничиваем длину контента
+            if len(content) > 500:
+                content = content[:500] + "..."
             
             response += f"📄 Джерело: {source}\n"
             response += f"{content}\n"
             
-            if i < len(results):
+            if i < len(relevant_results):
                 response += "\n" + "="*30 + "\n\n"
         
         return response
@@ -197,38 +242,49 @@ def search_in_knowledge_base(query):
         print(f"❌ DB error: {e}")
         return "⚠️ Сталася помилка при пошуку в базі знань."
 
-# Функція для RAG (Retrieval-Augmented Generation) - покращена відповідь GPT з контекстом
-def ask_gpt_with_context(message, use_knowledge_base=True):
-    """
-    Покращена функція для отримання відповіді від GPT з використанням контексту з бази знань
-    """
+def ask_gpt_with_smart_context(message):
+    """GPT с умным контекстом из базы знаний"""
     try:
         context = ""
         
-        if use_knowledge_base and vectorstore:
+        if vectorstore:
             try:
-                # Знаходимо релевантну інформацію в базі знань
-                results = vectorstore.similarity_search(message, k=3)
+                # Используем улучшенный поиск
+                processed_query = preprocess_query(message)
+                results = vectorstore.similarity_search(processed_query, k=5)
+                
                 if results:
-                    context = "\n\nКонтекст з бази знань профспілки:\n"
+                    # Оцениваем релевантность
+                    scored_results = []
                     for result in results:
-                        source = result.metadata.get('source', 'документ')
-                        context += f"З {source}: {result.page_content[:400]}...\n\n"
+                        score = calculate_relevance_score(result, message + ' ' + processed_query)
+                        scored_results.append((result, score))
+                    
+                    # Берем только релевантные результаты
+                    relevant_results = [result for result, score in scored_results if score > 10][:2]
+                    
+                    if relevant_results:
+                        context = "\n\nРелевантна інформація з бази знань:\n"
+                        for result in relevant_results:
+                            source = result.metadata.get('source', 'документ')
+                            content = result.page_content[:400]
+                            context += f"З {source}: {content}...\n\n"
             except Exception as e:
                 print(f"⚠️ Помилка пошуку контексту: {e}")
 
         system_message = (
-            "Ти експерт з трудового права та профспілкового захисту в Україні. "
-            "Відповідай професійно українською мовою, використовуючи наданий контекст та посилаючись на статті КЗпП України, якщо це доречно. "
-            "Якщо питання виходить за межі твоїх знань, рекомендуй звернутися до юриста профспілки. "
+            "Ти профспілковий помічник-експерт з трудового права України. "
+            "Відповідай професійно українською мовою, використовуючи наданий контекст. "
+            "Якщо в контексті є точна інформація - використовуй її. "
+            "Якщо контекст не релевантний - відповідай на основі загальних знань про трудове право. "
+            "Посилайся на статті КЗпП України, якщо це доречно. "
             "Структуруй відповідь чітко та логічно."
         )
 
         user_message = f"Питання: {message}"
         if context:
-            user_message += f"\n\n{context}"
+            user_message += f"\n{context}"
 
-        # ИСПРАВЛЕНО: Заменили старый API на новый
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -250,28 +306,3 @@ def ask_gpt_with_context(message, use_knowledge_base=True):
             "📞 050 324-54-11\n"
             "📧 profpmgu@gmail.com"
         )
-
-def get_openai_response(user_message, context=""):
-    try:
-        messages = [
-            {"role": "system", "content": "Ти - корисний асистент, який допомагає користувачам з їхніми питаннями."},
-        ]
-        
-        if context:
-            messages.append({"role": "system", "content": f"Контекст з бази знань: {context}"})
-        
-        messages.append({"role": "user", "content": user_message})
-        
-        # ИСПРАВЛЕНО: Заменили старый API на новый
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            max_tokens=1000,
-            temperature=0.3
-        )
-        
-        return response.choices[0].message.content
-        
-    except Exception as e:
-        print(f"❌ GPT error: {e}")
-        return "Вибач, сталася помилка при обробці твого запиту."
