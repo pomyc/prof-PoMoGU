@@ -145,7 +145,7 @@ def extract_key_concepts(query):
     return found_concepts
 
 def calculate_semantic_relevance(result, query, query_concepts):
-    """Вычисляет семантическую релевантность результата"""
+    """Более мягкая оценка семантической релевантности"""
     content = result.page_content.lower()
     source = result.metadata.get('source', '').lower()
     
@@ -156,36 +156,44 @@ def calculate_semantic_relevance(result, query, query_concepts):
     
     # Высокий балл за совпадение ключевых концепций
     common_concepts = set(query_concepts) & set(content_concepts)
-    score += len(common_concepts) * 50
+    score += len(common_concepts) * 30  # Снижено с 50
     
     # Специальная проверка для вопросов о взносах
     if 'взносы' in query_concepts:
-        money_keywords = ['грн', 'гривень', 'копійок', 'процент', '%', 'розмір', 'сума', 'ставка', 'тариф']
+        money_keywords = ['грн', 'гривень', 'копійок', 'процент', '%', 'розмір', 'сума', 'ставка', 'тариф', 'внесок', 'плата']
         if any(keyword in content for keyword in money_keywords):
-            score += 100
+            score += 50  # Снижено со 100
         
-        # Штраф за документы о выборах при вопросе о взносах
+        # Более мягкий штраф за документы о выборах
         if 'выборы' in content_concepts and 'взносы' not in content_concepts:
-            score -= 200
+            score -= 30  # Снижено с 200
     
     # Проверяем релевантность источника
     if 'взносы' in query_concepts:
-        if any(word in source for word in ['внесок', 'плата', 'фінанс', 'бюджет']):
-            score += 30
+        if any(word in source for word in ['внесок', 'плата', 'фінанс', 'бюджет', 'сума']):
+            score += 20  # Снижено с 30
         if any(word in source for word in ['вибор', 'звіт']):
-            score -= 50
+            score -= 15  # Снижено с 50
     
-    # Точные текстовые совпадения (с меньшим весом)
+    # Точные текстовые совпадения
     query_words = set(re.findall(r'\w+', query.lower()))
     content_words = set(re.findall(r'\w+', content))
     
     exact_matches = query_words & content_words
-    score += len(exact_matches) * 5
+    score += len(exact_matches) * 3  # Снижено с 5
+    
+    # Дополнительные бонусы для общих профсоюзных терминов
+    union_terms = ['профспілка', 'профком', 'металург', 'гірник', 'працівник', 'член']
+    query_union_terms = [term for term in union_terms if term in query.lower()]
+    content_union_terms = [term for term in union_terms if term in content]
+    
+    if query_union_terms and content_union_terms:
+        score += len(set(query_union_terms) & set(content_union_terms)) * 10
     
     return score
 
 def search_in_knowledge_base(query):
-    """Улучшенный семантический поиск в базе знаний"""
+    """Многоуровневый поиск в базе знаний"""
     try:
         if not vectorstore:
             return "⚠️ База знань недоступна. Спробуйте пізніше."
@@ -212,17 +220,33 @@ def search_in_knowledge_base(query):
         # Сортируем по релевантности
         scored_results.sort(key=lambda x: x[1], reverse=True)
         
-        # Берем только действительно релевантные результаты
-        min_score = 50 if query_concepts else 20
-        relevant_results = [result for result, score in scored_results if score >= min_score][:3]
+        # Многоуровневый отбор результатов
+        high_relevance = [result for result, score in scored_results if score >= 50][:3]
+        medium_relevance = [result for result, score in scored_results if 20 <= score < 50][:3]
+        low_relevance = [result for result, score in scored_results if 5 <= score < 20][:2]
         
-        if not relevant_results:
-            return "📚 Не знайдено релевантної інформації для вашого запиту. Можливо, потрібно перефразувати питання або звернутися безпосередньо до профспілки."
+        # Выбираем лучшие доступные результаты
+        if high_relevance:
+            selected_results = high_relevance
+            confidence = "висока"
+        elif medium_relevance:
+            selected_results = medium_relevance
+            confidence = "середня"
+        elif low_relevance:
+            selected_results = low_relevance
+            confidence = "низька"
+        else:
+            return "📚 Не знайдено релевантної інформації для вашого запиту. Спробуйте перефразувати питання або звернутися безпосередньо до профспілки."
         
-        # Формируем ответ
-        response = "📖 Знайдена інформація з бази знань:\n\n"
+        # Формируем ответ с указанием уровня соответствия
+        if confidence == "висока":
+            response = "📖 Знайдена релевантна інформація з бази знань:\n\n"
+        elif confidence == "середня":
+            response = "📖 Знайдена частково релевантна інформація з бази знань:\n\n"
+        else:
+            response = "📖 Знайдена загальна інформація з бази знань (можливо потребує уточнення):\n\n"
         
-        for i, result in enumerate(relevant_results, 1):
+        for i, result in enumerate(selected_results, 1):
             source = result.metadata.get('source', 'Невідоме джерело')
             content = result.page_content.strip()
             
@@ -233,8 +257,12 @@ def search_in_knowledge_base(query):
             response += f"📄 Джерело: {source}\n"
             response += f"{content}\n"
             
-            if i < len(relevant_results):
+            if i < len(selected_results):
                 response += "\n" + "="*30 + "\n\n"
+        
+        # Добавляем рекомендацию при низкой релевантности
+        if confidence == "низька":
+            response += "\n\n💡 Для більш точної інформації рекомендую звернутися безпосередньо до профспілки."
         
         return response
         
@@ -262,8 +290,8 @@ def ask_gpt_with_smart_context(message):
                         score = calculate_semantic_relevance(result, message, query_concepts)
                         scored_results.append((result, score))
                     
-                    # Берем только высокорелевантные результаты
-                    min_score = 30 if query_concepts else 15
+                    # Берем релевантные результаты с более мягкими критериями
+                    min_score = 15 if query_concepts else 10  # Снижено с 30/15
                     relevant_results = [result for result, score in scored_results if score >= min_score][:2]
                     
                     if relevant_results:
