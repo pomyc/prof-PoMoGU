@@ -158,7 +158,7 @@ def is_document_relevant(result, query):
     return True
 
 def calculate_relevance_score(result, query):
-    """Улучшенная система оценки релевантности с более строгими критериями"""
+    """Сбалансированная система оценки релевантности"""
     content = result.page_content.lower()
     source = result.metadata.get('source', '').lower()
     query_lower = query.lower()
@@ -172,12 +172,8 @@ def calculate_relevance_score(result, query):
     word_matches = 0
     for word in query_words:
         if word in content:
-            score += 10
+            score += 5
             word_matches += 1
-    
-    # Если совпадений слов меньше 30% от запроса - сразу низкий балл
-    if len(query_words) > 0 and word_matches / len(query_words) < 0.3:
-        score = max(score, 5)  # Ограничиваем максимальный балл
     
     # Специальная обработка для вопросов о взносах
     dues_keywords = ['внесок', 'внески', 'взнос', 'плата', 'розмір', 'сума', 'скільки', 'який розмір']
@@ -193,22 +189,18 @@ def calculate_relevance_score(result, query):
         # Высокий балл за прямые упоминания взносов
         for term in high_value_terms:
             if term in content:
-                score += 100
+                score += 50
                 financial_matches += 1
         
         # Средний балл за контекстные финансовые термины
         for term in context_terms:
             if term in content:
-                score += 20
+                score += 15
                 financial_matches += 1
-        
-        # Если это вопрос о взносах, но в документе нет финансовых терминов - очень низкий балл
-        if financial_matches == 0:
-            score = min(score, 5)
         
         # Супер бонус за источник "статут" + финансовые термины
         if 'статут' in source and financial_matches > 0:
-            score += 150
+            score += 100
         
         # Бонус за конкретные фразы о размере взносов
         specific_phrases = [
@@ -218,17 +210,24 @@ def calculate_relevance_score(result, query):
         ]
         for phrase in specific_phrases:
             if phrase in content:
-                score += 80
+                score += 60
+    else:
+        # Для других типов вопросов - стандартная обработка
+        # Бонус за профсоюзные термины
+        union_terms = ['профспілка', 'профком', 'металург', 'гірник', 'член', 'організація']
+        for term in union_terms:
+            if term in query_lower and term in content:
+                score += 10
     
-    # Штраф за слишком короткий контент (менее 100 символов)
-    if len(result.page_content) < 100:
-        score -= 20
+    # Легкий штраф за слишком короткий контент (менее 50 символов)
+    if len(result.page_content) < 50:
+        score -= 10
     
-    # Штраф за документы, которые выглядят как заголовки или оглавления
+    # Штраф за документы-заголовки только если они очень короткие
     title_indicators = ['затверджено', 'статут', 'визначення термінів', 'зміст', 'розділ']
     title_matches = sum(1 for indicator in title_indicators if indicator in content)
-    if title_matches >= 2 and len(result.page_content) < 200:
-        score -= 30
+    if title_matches >= 3 and len(result.page_content) < 150:
+        score -= 20
     
     print(f"🔢 Файл: {source}, запрос: '{query[:30]}...', балл: {score}")
     return score
